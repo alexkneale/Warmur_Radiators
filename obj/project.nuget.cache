@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "ylBr/NyqDAU=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\shann\\OneDrive\\Documents OneDrive Personal\\Warmur\\column_rad_app\\column_rad_app.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\shann\\.nuget\\packages\\microsoft.ml.onnxruntime\\1.20.1\\microsoft.ml.onnxruntime.1.20.1.nupkg.sha512",
+    "C:\\Users\\shann\\.nuget\\packages\\microsoft.ml.onnxruntime.managed\\1.20.1\\microsoft.ml.onnxruntime.managed.1.20.1.nupkg.sha512",
+    "C:\\Users\\shann\\.nuget\\packages\\system.memory\\4.5.5\\system.memory.4.5.5.nupkg.sha512"
+  ],
+  "logs": []
+}
