@@ -44,6 +44,7 @@ def get_uncertainty(y_pred_value, error_dict):
     else:
         return None  # if the value doesn't fall into any bin
 
+## 4 features for user to input
 Height = np.float64(input('Height = '))
 Width = np.float64(input('Width = '))
 Panels = int(input('Panels = '))
@@ -54,12 +55,16 @@ Fins = int(input('Fins = '))
 # Load the ONNX model
 session = ort.InferenceSession("panel_rads/poly_model_pipeline.onnx")
 
-# Prepare input data (for instance, one sample with 4 features)
-X_observed = np.array([[Height, Width, Panels, Fins]], dtype=np.float32)
 
-# ONNX Runtime requires a dictionary for inputs; make sure the key matches the name used in initial_type.
-input_name = session.get_inputs()[0].name
-onnx_pred = session.run(None, {input_name: X_observed})[0]
+# prepare input dictionary
+input_dict = {
+    'Height': np.array([[Height]], dtype=np.float32),
+    'Width': np.array([[Width]], dtype=np.float32),
+    'Panels': np.array([[Panels]], dtype=np.float32),
+    'Fins': np.array([[Fins]], dtype=np.float32)
+}
+# model prediction, using input dictionary
+onnx_pred = session.run(None, input_dict)[0]
 
 
 # Load the inverse scaler ONNX model
