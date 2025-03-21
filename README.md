@@ -1,32 +1,99 @@
 # Models for Heat Output of Radiators
 
-Here we attempt to produce machine learning models for radiator heat outputs. The rationale for this project is to attempt to help installers gauge a radiator's heat output, without having to consult endless radiator catalogues. 
+This project presents machine learning models designed to estimate the heat output of radiators, aiming to simplify the installation process by reducing the reliance on extensive radiator catalogues. We focus on three main radiator types—column radiators, panel radiators, and towel rails—with dedicated models developed for each due to the distinct underlying heat transfer characteristics. (Note: the towel rail model did not achieve sufficient accuracy because of limited data; for further details, please see the `towel_rail.ipynb` notebook.)
 
-There are three main types of radiators: column radiators, panel radiators and towel rails. A machine learning model was constructed for each type of radiator, as the underlying physics of heat output is quite different between radiator types. Therefore a 'universal' radiator model cannot be constructed. In our exploration, we found that we could not construct a sufficiently accurate towel rail model. This was mostly due to us having insufficient data. If more data is available in the future, please consult previous work done on towel rails in the jupyter notebook towel_rail.ipynb.
+---
 
-The models were implemented in scikit-learn in Python. They were then converted into ONNX, before being run using C# inference.
+## Overview
 
-#### Exploration of Different ML Models in Jupyter Notebooks
-The 'core' of the project revolves around the jupyter notebooks: column_rad.ipynb, panel_rad.ipynb and towel_rail.ipynb. In these notebooks, I have performed exploratory data analysis and experimented with different models. I have included comments and discussions of different models and methodologies here. Therefore, anyone curious to understand the choices of data processing, ML models and parameters should consult these notebooks. That said, if you are only interested in running the model, without understanding the underlying decisions I have made, you do not have to consult these notebooks, and instead read the instructions in the next few sections. 
+- **Objective:**  
+  Develop machine learning models that accurately predict the heat output (in Watts) of radiators, thereby aiding installers in the selection process.
 
-#### Note on data style
+- **Approach:**  
+  - Separate models are built for column and panel radiators.
+  - Towel rail models were explored but remain inconclusive due to insufficient data.
+  - Models are initially developed and validated using Jupyter notebooks, then implemented in scikit-learn.
+  - Final models are converted into ONNX format for deployment via C# inference.
 
-Throughout this project, we have assumed that the dataset we are working with to create ML models was of the following form (as given in Radiators.csv):
+---
 
-- The dataset has the following columns: Type,	Manufacturer,	Range,	Panel Radiator Type,	Column Style,	Material,	Height,	Width	Sections / Elements	Cols,	Manu. Part Number,	Heat Output Watts (dT50),	Heat Output Btu/hr (1),	n coefficient Strategy,	n coefficient.
-- Column radiators, panel radiators and towel radiators are denoted as the following under 'Type' column: 'Column', 'Panel', 'Towel Rail'
-- Column radiators have the following 'Column Styles' : 'Flat' and 'Simple Tube'
-- We only looked at heat output in Watts
+## Project Components
 
-#### Files that train and save the model
+### Jupyter Notebooks and Model Exploration
 
-Sufficiently accurate models were constructed for column radiators and panel radiators. The most important code from column_rad.ipynb and panel_rad.ipynb was then transferred to panel_rads/model_onnx.py and column_rads/column_model_pipeline.py. In both of these two files, we use the all code from both jupyter notebooks which is sufficient to construct the machine learning models and gauge their accuracy. We then transform both of these scikit-learn models into ONNX models (panel_rads/poly_model_pipeline.onnx and column_rads/column_model_pipeline.onnx). Furthermore, we also save the functions that convert our standardized heat outputs (a number from 0 to 1) to unstandardized heat outputs in Watts to the files panel_rads/inverse_target_scaler.onnx and column_rads/inverse_target_scaler.onnx. A rationale for standardizing our heat outputs is that it allows for greater stability. Finally, the error of the models, in the form of percentage error (as calibrated by the performance of the models on test data), was calibrated and saved to the json files column_rads/error_calibration.json and panel_rads/error_calibration.json. Here, the error was saved for the following ranges of heat outputs (Watts) : (0 - 500), (500 - 1000), (1000 - 1500), (1500 - 2000), (2000, infinity). 
+- **Core Notebooks:**  
+  - `column_rad.ipynb`  
+  - `panel_rad.ipynb`  
+  - `towel_rail.ipynb`  
 
-#### Files that double check everything is running fine
+  In these notebooks, exploratory data analysis, feature selection, and model experiments are documented in detail. The notebooks also discuss various data processing strategies, machine learning models, and parameter choices. Users interested in the model development process should refer to these notebooks. If your focus is solely on executing the models, please see the sections below for instructions.
 
-The files column_rads/input_onnx.py and panel_rads/panel_rad_input_onnx.py both run the ONNX files and the error data saved in the json files. Anyone wanting to double check that the ONNX models and inverse scaler functions are running as expected should run this code, before attempting the C# inference of these models.
+### Data Specifications
 
-#### C# inference
+The project is based on a dataset provided in `Radiators.csv`, with the following characteristics:
 
-The folders column_rad_app and panel_rad_app both contain the code which runs a C# inference of the ONNX models. For the time being, the user has to set the values of the inputs (number of columns, number of panels etc) in the code itself. Furthermore, this C# inference of the ONNX model does not provide any error estimates (as given in the JSON files). Therefore, future work should concentrate on incorporating our error estimate data to provide error estimates to users.
+- **Columns:**  
+  `Type`, `Manufacturer`, `Range`, `Panel Radiator Type`, `Column Style`, `Material`, `Height`, `Width`, `Sections / Elements`, `Cols`, `Manu. Part Number`, `Heat Output Watts (dT50)`, `Heat Output Btu/hr (1)`, `n coefficient Strategy`, `n coefficient`.
 
+- **Radiator Types in 'Type' Column:**  
+  - Column: `"Column"`  
+  - Panel: `"Panel"`  
+  - Towel Rail: `"Towel Rail"`
+
+- **Additional Details:**  
+  - Column radiators feature two styles: `"Flat"` and `"Simple Tube"`.
+  - Only the heat output in Watts is considered for modeling.
+
+### Model Training and Deployment
+
+- **Training Files:**  
+  - **Column Radiators:**  
+    - Notebook: `column_rad.ipynb`  
+    - Pipeline script: `column_rads/column_model_pipeline.py`
+  - **Panel Radiators:**  
+    - Notebook: `panel_rad.ipynb`  
+    - Pipeline script: `panel_rads/model_onnx.py`
+
+  Both pipelines convert the trained scikit-learn models into ONNX format:
+  - Column: `column_rads/column_model_pipeline.onnx`
+  - Panel: `panel_rads/poly_model_pipeline.onnx`
+
+- **Scaler Functions:**  
+  The inverse scaling functions, which convert standardized outputs back to Watts, are saved as:
+  - Column: `column_rads/inverse_target_scaler.onnx`
+  - Panel: `panel_rads/inverse_target_scaler.onnx`
+
+  Standardization was applied to enhance model stability.
+
+- **Error Calibration:**  
+  The model error, expressed as a percentage error based on test data, is recorded in JSON files:
+  - Column: `column_rads/error_calibration.json`
+  - Panel: `panel_rads/error_calibration.json`
+  
+  Error estimates are provided for the following heat output ranges (in Watts):  
+  `(0 - 500)`, `(500 - 1000)`, `(1000 - 1500)`, `(1500 - 2000)`, `(2000, infinity)`.
+
+### Validation and Testing
+
+- **Model Verification:**  
+  - Scripts:  
+    - `column_rads/input_onnx.py`  
+    - `panel_rads/panel_rad_input_onnx.py`
+
+  These scripts execute the ONNX models and load the corresponding error data, allowing users to verify the correct functioning of the models before integrating them with the C# inference code.
+
+### C# Inference
+
+- **Deployment Folders:**  
+  - `column_rad_app`  
+  - `panel_rad_app`
+
+  These folders contain the code for running the ONNX models via C# inference. Currently, input values (such as the number of columns and panels) must be manually set in the source code. Additionally, the C# application does not yet integrate the JSON error estimates. Future improvements should aim to incorporate these error estimates to provide more informative outputs.
+
+---
+
+## Final Remarks
+
+This README outlines the architecture and rationale behind our radiator heat output prediction models. It is intended to serve as both a guide for further development and a reference for those integrating the models into production systems.
+
+For detailed model exploration, analysis, and additional context, please refer to the corresponding Jupyter notebooks included in the project.
