@@ -24,60 +24,85 @@ import onnx
 
 from onnx import helper, TensorProto
 
+### load dataset, and clean it
 
-loaded_model = joblib.load("panel_rads/poly_model_pipeline.pkl")
-# assuming the model expects 4 input features
-initial_type = [('input', FloatTensorType([None, 4]))]
-# convert loaded model
-onnx_model = convert_sklearn(loaded_model, initial_types=initial_type)
-#saving onnx model
-with open("panel_rads/poly_model_pipeline.onnx", "wb") as f:
-    f.write(onnx_model.SerializeToString())
+# load dataset
+df = pd.read_csv('Radiators.csv')
 
-# load fitted target scaler 
-target_scaler = joblib.load("panel_rads/target_scaler.pkl")
+# drop irrelevant features
+features_to_drop = ['Sections / Elements','Manufacturer','Range','Column Style', 'Material','Cols','Manu. Part Number','Heat Output Btu/hr (1)','n coefficient Strategy', 'n coefficient']
+df = df.drop(features_to_drop, axis = 1)
 
-# define the input type
-initial_type = [('input', FloatTensorType([None, 1]))]
+# select only panel rads
+df = df.loc[df.Type == 'Panel']
+df = df.drop('Type', axis =1)
 
-# convert the target scaler to ONNX format
-onnx_target_scaler = convert_sklearn(target_scaler, initial_types=initial_type)
+# rename some features, for ease
+df = df.rename(columns = {'Heat Output Watts (dT50)' : 'Heat', 'Panel Radiator Type' : 'panel_radiator_type' })
 
-# save the converted ONNX model to a file
-with open("panel_rads/target_scaler.onnx", "wb") as f:
-    f.write(onnx_target_scaler.SerializeToString())
+# select rads that fit barry's descriptions 
+df = df.loc[df.Height <= 750]
+df = df.loc[df.Height >= 300]
+df = df.loc[df.Width <= 1600]
+df = df.loc[df.Width >= 400]
+
+# convert feature panel_radiator_type to two features: fins and panels
+
+df['panel_radiator_type'] = df['panel_radiator_type'].astype(int)
+df['panels'] = df['panel_radiator_type'] // 10
+df['fins'] = df['panel_radiator_type'] % 10
+df = df.drop('panel_radiator_type', axis = 1)
 
 
-## inverse scaler transformation
+### training and test datasets
 
-# Assume target_scaler is already loaded from joblib
+# random seed, for reproducibility
+seed = 4542
+
+X = df.drop(['Heat'], axis = 1)
+features = list(X.columns)
+
+y = df['Heat'].copy()
+y = y.values
+
+# training and test data
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
+
+# standardizing target variable 
+y_train = y_train.reshape(-1,1)
+target_scaler  = MinMaxScaler()
+y_train_scaled = target_scaler.fit_transform(y_train)
+
+
+### saving inverse scaler transformation
+
 data_min = target_scaler.data_min_  # shape: (1,) for a single feature
 data_max = target_scaler.data_max_
 scale = data_max - data_min
 
-# Create input and output tensor info (here, working on a single feature)
+# create input and output tensor info (here, working on a single feature)
 input_tensor = helper.make_tensor_value_info('input', TensorProto.FLOAT, [None, 1])
 output_tensor = helper.make_tensor_value_info('output', TensorProto.FLOAT, [None, 1])
 
-# Create constant tensors for scale and data_min
+# create constant tensors for scale and data_min
 scale_tensor = helper.make_tensor("scale", TensorProto.FLOAT, [1], scale.astype(np.float32))
 min_tensor = helper.make_tensor("min", TensorProto.FLOAT, [1], data_min.astype(np.float32))
 
-# Create a multiplication node: x * scale
+# create a multiplication node: x * scale
 mul_node = helper.make_node(
     'Mul',
     inputs=['input', 'scale'],
     outputs=['mul_output']
 )
 
-# Create an addition node: (x * scale) + data_min
+# create an addition node: (x * scale) + data_min
 add_node = helper.make_node(
     'Add',
     inputs=['mul_output', 'min'],
     outputs=['output']
 )
 
-# Build the graph
+# build the graph
 graph = helper.make_graph(
     [mul_node, add_node],
     "InverseMinMaxScaler",
@@ -88,9 +113,71 @@ graph = helper.make_graph(
 
 opset_id = helper.make_operatorsetid("", 21)
 
-# Create the model
+# create the model
 model = helper.make_model(graph, producer_name='inverse_minmax_scaler', opset_imports=[opset_id])
 onnx.checker.check_model(model)
 
-# Save the ONNX model to file
+# save the ONNX model to file
 onnx.save(model, "panel_rads/inverse_target_scaler.onnx")
+
+
+### model
+
+# polynomial 3 model
+pf = PolynomialFeatures(degree= 3)
+
+# model pipeline
+poly_interact_pipe_final = Pipeline([
+        ("count_pre", MinMaxScaler()), # Applied to the count variables
+        ('poly', pf),
+        ('model', LinearRegression(fit_intercept=True))
+])
+
+# fitting model
+poly_interact_fit = poly_interact_pipe_final.fit(X_train, y_train_scaled.ravel())
+
+
+# assuming the model expects 4 input features
+initial_type = [
+    ('Height', FloatTensorType([None, 1])),
+    ('Width', FloatTensorType([None, 1])),
+    ('Panels', FloatTensorType([None, 1])),
+    ('Fins', FloatTensorType([None, 1]))
+]# convert loaded model
+onnx_model = convert_sklearn(poly_interact_fit, initial_types=initial_type)
+#saving onnx model
+with open("panel_rads/poly_model_pipeline.onnx", "wb") as f:
+    f.write(onnx_model.SerializeToString())
+
+### uncertainty dictionary
+
+# estimating outputs from test inputs
+y_pred_scaled = poly_interact_fit.predict(X_test)
+y_pred = target_scaler.inverse_transform(y_pred_scaled.reshape(-1, 1))
+y_pred = y_pred.ravel()
+
+# percentage error, to use for uncertainty propogation
+pct_diff = np.abs(y_test - y_pred) / y_test * 100
+
+# define the bins as tuples (lower_bound, upper_bound) and corresponding labels.
+bins = [(0, 500), (500, 1000), (1000, 1500), (1500, 2000), (2000, np.inf)]
+bin_labels = ["0-500", "500-1000", "1000-1500", "1500-2000", "2000+"]
+
+# uncertainty dictionary
+error_dict = {}
+
+for (lower, upper), label in zip(bins, bin_labels):
+    if np.isinf(upper):
+        mask = (y_test >= lower)
+    else:
+        if lower == 0:
+            mask = (y_test > lower) & (y_test < upper)
+        else:
+            mask = (y_test >= lower) & (y_test < upper)
+    # compute mean percentage error for the bin
+    avg_error = np.mean(pct_diff[mask])
+    error_dict[label] = avg_error
+
+# save the error calibration to a JSON file for later use
+with open("panel_rads/error_calibration.json", "w") as f:
+    json.dump(error_dict, f, indent=4)
