@@ -4,16 +4,19 @@ Here we attempt to produce machine learning models for radiator heat outputs. Th
 
 There are three main types of radiators: column radiators, panel radiators and towel rails. A machine learning model was constructed for each type of radiator, as the underlying physics of heat output is quite different between radiator types. Therefore a 'universal' radiator model cannot be constructed. In our exploration, we found that we could not construct a sufficiently accurate towel rail model. This was mostly due to us having insufficient data. If more data is available in the future, please consult previous work done on towel rails in the jupyter notebook towel_rail.ipynb.
 
+The models were implemented in scikit-learn in Python. They were then converted into ONNX, before being run using C# inference.
+
 #### Exploration of Different ML Models in Jupyter Notebooks
-The 'core' of the project revolves around the jupyter notebooks: column_rad.ipynb, panel_rad.ipynb and towel_rail.ipynb. In these notebooks, I have performed exploratory data analysis of our data and experimented with different models. I have included comments and discussions of different models and methodologies here. Therefore, anyone curious to understand the choices of data processing, ML models and parameters should consult these notebooks. That said, if you are only interested in running the model, without understanding the underlying decisions I have made, you do not have to consult these notebooks, and instead read the instructions in the next few sections. 
+The 'core' of the project revolves around the jupyter notebooks: column_rad.ipynb, panel_rad.ipynb and towel_rail.ipynb. In these notebooks, I have performed exploratory data analysis and experimented with different models. I have included comments and discussions of different models and methodologies here. Therefore, anyone curious to understand the choices of data processing, ML models and parameters should consult these notebooks. That said, if you are only interested in running the model, without understanding the underlying decisions I have made, you do not have to consult these notebooks, and instead read the instructions in the next few sections. 
 
 #### Note on data style
 
-Throughout this project, we have assumed that the data we are working with to create ML models was of the following form (which it was at the time of the project).
+Throughout this project, we have assumed that the dataset we are working with to create ML models was of the following form (as given in Radiators.csv):
 
 - The dataset has the following columns: Type,	Manufacturer,	Range,	Panel Radiator Type,	Column Style,	Material,	Height,	Width	Sections / Elements	Cols,	Manu. Part Number,	Heat Output Watts (dT50),	Heat Output Btu/hr (1),	n coefficient Strategy,	n coefficient.
 - Column radiators, panel radiators and towel radiators are denoted as the following under 'Type' column: 'Column', 'Panel', 'Towel Rail'
-- 
+- Column radiators have the following 'Column Styles' : 'Flat' and 'Simple Tube'
+- We only looked at heat output in Watts
 
 #### Files that train and save the model
 
